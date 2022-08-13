@@ -70,20 +70,100 @@ async function main() {
 
         header(`📝 ${val}-form.component.html\n`);
         for (const f of fields) {
-          // console.log(await generateValidators(f));
-          console.log(`
-<mat-form-field class="">
-  <mat-label>${toFormalCase(f.name)}</mat-label>
-  <input matInput type="text" placeholder="${toFormalCase(f.name)}" formControlName="${f.name}">
-  <mat-error *ngIf="form.controls.${f.name}.hasError('required')">
-    Campo é requerido.
-  </mat-error>
-</mat-form-field>
-`);
+          console.log(await generateFields(f));
         }
         await keypress();
+
+        header(`📝 ${val}-datatable.component.html\n`);
+        for (const f of ps.declarations[0].properties) {
+          console.log(await generateColumns(f));
+        }
+        console.log(boilerActions, "\n");
+        await keypress();
+
+        header(`📝 ${val}-datatable.component.ts\n`);
+        let list = [];
+        for (const f of ps.declarations[0].properties) {
+          const item = await generateColumnsString(f);
+          if (typeof item === "string") list.push(item);
+          else list = list.concat(item);
+        }
+        list.push("actions");
+        console.log("[" + list.map((v) => `'${v}'`).join(", ") + "]");
+        await keypress();
+
+        header(`\n📝 ${val}.service.ts`);
+        console.log(bolierService(className, val));
       }
     }
+  }
+}
+
+async function generateColumnsString(f) {
+  if (/^(string|number|Date)$/.test(f.type)) {
+    return f.name;
+  } else {
+    const ps = await tsParser.parseSource(
+      `interface ${toPascalCase(f.name)} ${f.type}`
+    );
+    const lines = await Promise.all(
+      ps.declarations[0].properties.map(
+        async (i) => await generateColumnsString(i)
+      )
+    );
+    return lines;
+  }
+}
+
+async function generateColumns(f) {
+  if (/^(string|number|Date)$/.test(f.type)) {
+    let pipe = "";
+    switch (f.type) {
+      case "Date":
+        pipe = " | date : 'short' : '' : 'pt-BR'";
+    }
+    return boilerTableColumn(f.name, pipe, true);
+  } else {
+    const ps = await tsParser.parseSource(
+      `interface ${toPascalCase(f.name)} ${f.type}`
+    );
+    const lines = await Promise.all(
+      ps.declarations[0].properties.map(async (i) => await generateColumns(i))
+    );
+    return lines.join("\n");
+  }
+}
+
+async function generateFields(f) {
+  if (/^(string|number|Date)$/.test(f.type)) {
+    const validators = [];
+    if (!f.isOptional)
+      validators.push(boilerMatError(f.name, "required", "Campo é requerido"));
+    if (f.name.toLowerCase().includes("email"))
+      validators.push(boilerMatError(f.name, "email", "E-mail inválido"));
+    let type;
+    switch (f.type) {
+      case "number":
+        type = "number";
+        break;
+      case "Date":
+        type = "date";
+        validators.push(boilerMatError(f.name, "pattern", "Formato inválido"));
+        break;
+      default:
+        type = "text";
+    }
+    return boilerMatForm(f.name, type, validators);
+  } else {
+    const ps = await tsParser.parseSource(
+      `interface ${toPascalCase(f.name)} ${f.type}`
+    );
+    const lines = await Promise.all(
+      ps.declarations[0].properties.map(async (i) => await generateFields(i))
+    );
+    return `\n<fieldset class="ocupy flex-form" formGroupName="${
+      f.name
+    }">\n${lines.join("\n   ")}\n\n</fieldset>`;
   }
 }
 
@@ -165,6 +245,16 @@ Arguments:
 `);
 }
 
+const keypress = async () => {
+  process.stdin.setRawMode(true);
+  return new Promise((resolve) =>
+    process.stdin.once("data", () => {
+      process.stdin.setRawMode(false);
+      resolve();
+    })
+  );
+};
+
 const boilerCLIModule = (val) => `
 ng g m ${val} --routing
 `;
@@ -173,9 +263,6 @@ const boilerCLIModelComp = (val) => `
 ng g i ${val}/${val} model
 ng g c ${val}/${val}-datatable
 ng g c ${val}/${val}-form
-`;
-
-const boilerAngularCLI = (val) => `
 ng g s ${val}/${val}
 `;
 
@@ -199,14 +286,69 @@ const boilerRoutingModule = (className) => `
 { path: ':id/edit', component: ${className}FormComponent },
 `;
 
-const keypress = async () => {
-  process.stdin.setRawMode(true);
-  return new Promise((resolve) =>
-    process.stdin.once("data", () => {
-      process.stdin.setRawMode(false);
-      resolve();
-    })
+const boilerMatError = (name, type, msg) => `
+  <mat-error *ngIf="form.controls.${name}.hasError('${type}')">
+   ${msg}.
+  </mat-error>`;
+
+const boilerMatForm = (name, type, validates) => `
+<mat-form-field class="">
+  <mat-label>${toFormalCase(name)}</mat-label>
+  <input matInput type="${type}" placeholder="${toFormalCase(
+  name
+)}" formControlName="${name}">${validates.join("\n")}
+</mat-form-field>`;
+
+const boilerTableColumn = (name, pipe, hasSort) => `
+<!-- ${name} Column -->
+<ng-container matColumnDef="${name}">
+  <th mat-header-cell *matHeaderCellDef${
+    hasSort ? " mat-sort-header" : ""
+  }>${toFormalCase(name)}</th>
+  <td mat-cell *matCellDef="let element">{{element.${name}${pipe}}}</td>
+</ng-container>`;
+
+const boilerActions = `
+<!-- Actions Column -->
+<ng-container matColumnDef="actions">
+  <th mat-header-cell *matHeaderCellDef>Ações</th>
+  <td mat-cell *matCellDef="let element">
+    <button mat-icon-button color="primary" (click)="onUpdate(element.id)">
+      <mat-icon>edit</mat-icon>
+    </button>
+    <button mat-icon-button color="accent" (click)="onDelete(element.id)">
+      <mat-icon>delete</mat-icon>
+    </button>
+  </td>
+</ng-container>`;
+
+const bolierService = (className, val) => `
+index(): Observable<${className}[]> {
+  return from(db.${val}.toArray()).pipe(delay(1), take(1));
+}
+
+show(id: number): Observable<${className}> {
+  return from(db.${val}.get(parseInt(\`\${id}\`))).pipe(
+    map(ent => ent ? <${className}>ent : <${className}>{}),
+    take(1)
   );
-};
+}
+
+private transformToSave(entity: ${className}): ${className} {
+  entity.updatedAt = new Date();
+  return entity;
+}
+
+store(entity: ${className}): Observable<number> {
+  entity = this.transformToSave(entity);
+  entity.createdAt = new Date();
+  return from(db.${val}.add(entity)).pipe(take(1));
+}
+
+update(entity: ${className}): Observable<number> {
+  entity = this.transformToSave(entity);
+  return from(db.${val}.put(entity)).pipe(take(1));
+}
+`;
 
 main().then(process.exit);
