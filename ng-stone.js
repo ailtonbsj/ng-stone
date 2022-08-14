@@ -6,6 +6,7 @@ const tsp = require("typescript-parser");
 const tsParser = new tsp.TypescriptParser();
 
 const vals = {};
+const extrasFields = {};
 
 // Groups values by arg
 let argLabel;
@@ -32,32 +33,45 @@ async function main() {
         const pathName = val.split("-").join("");
         const className = toPascalCase(val);
 
-        header("📂 Angular CLI : Module");
-        console.log(boilerCLIModule(val));
-        await keypress();
+        // header("📂 Angular CLI : Module");
+        // console.log(boilerCLIModule(val));
+        // await keypress();
 
-        header("📝 app-routing.module.ts");
-        console.log(boilerRouting(pathName, val, className));
-        await keypress();
+        // header("📝 app-routing.module.ts");
+        // console.log(boilerRouting(pathName, val, className));
+        // await keypress();
 
-        header(`📝 ${val}-routing.module.ts`);
-        console.log(boilerRoutingModule(className));
-        await keypress();
+        // header(`📝 ${val}-routing.module.ts`);
+        // console.log(boilerRoutingModule(className));
+        // await keypress();
 
-        header("📝 app.component.html");
-        console.log(boilerMenu(pathName, formal));
-        await keypress();
+        // header("📝 app.component.html");
+        // console.log(boilerMenu(pathName, formal));
+        // await keypress();
 
-        header("📂 Angular CLI : Model and Components");
-        console.log(boilerCLIModelComp(val));
-        console.log("\n\nYou need edit your interface model!!!");
-        await keypress();
+        // header("📂 Angular CLI : Model and Components");
+        // console.log(boilerCLIModelComp(val));
+        // console.log("\n\nYou need edit your interface model!!!");
+        // await keypress();
 
         const model = fs.readFileSync(`src/app/${val}/${val}.model.ts`, {
           encoding: "utf8",
           flag: "r",
         });
         const ps = await tsParser.parseSource(model);
+        const props = ps.declarations[0].properties;
+        props.map((f, i) => {
+          const start = f.end;
+          const end = props[i + 1] ? props[i + 1].start : model.length - 2;
+          let extras;
+          try {
+            extras = JSON.parse(model.substring(start, end).replace("//", ""));
+          } catch (error) {
+            extras = undefined;
+          }
+          extrasFields[f.name] = extras;
+        });
+
         const fields = ps.declarations[0].properties.filter(
           (f) => !/^(id|createdAt|updatedAt)$/.test(f.name)
         );
@@ -93,7 +107,7 @@ async function main() {
         await keypress();
 
         header(`\n📝 ${val}.service.ts`);
-        console.log(bolierService(className, val));
+        console.log(boilerService(className, val));
       }
     }
   }
@@ -226,6 +240,14 @@ function toPascalCase(val) {
     .join("");
 }
 
+function getFormal(val) {
+  if (extrasFields[val] && extrasFields[val].formal) {
+    return extrasFields[val].formal;
+  } else {
+    return toFormalCase(val);
+  }
+}
+
 function toFormalCase(val) {
   return val
     .split("-")
@@ -293,8 +315,8 @@ const boilerMatError = (name, type, msg) => `
 
 const boilerMatForm = (name, type, validates) => `
 <mat-form-field class="">
-  <mat-label>${toFormalCase(name)}</mat-label>
-  <input matInput type="${type}" placeholder="${toFormalCase(
+  <mat-label>${getFormal(name)}</mat-label>
+  <input matInput type="${type}" placeholder="${getFormal(
   name
 )}" formControlName="${name}">${validates.join("\n")}
 </mat-form-field>`;
@@ -302,9 +324,7 @@ const boilerMatForm = (name, type, validates) => `
 const boilerTableColumn = (name, pipe, hasSort) => `
 <!-- ${name} Column -->
 <ng-container matColumnDef="${name}">
-  <th mat-header-cell *matHeaderCellDef${
-    hasSort ? " mat-sort-header" : ""
-  }>${toFormalCase(name)}</th>
+  <th mat-header-cell *matHeaderCellDef${hasSort ? " mat-sort-header" : ""}>${getFormal(name)}</th>
   <td mat-cell *matCellDef="let element">{{element.${name}${pipe}}}</td>
 </ng-container>`;
 
@@ -322,13 +342,17 @@ const boilerActions = `
   </td>
 </ng-container>`;
 
-const bolierService = (className, val) => `
+const boilerService = (className, val) => `
+table: Table<${className}, number> = db.${val};
+
+constructor() { }
+
 index(): Observable<${className}[]> {
-  return from(db.${val}.toArray()).pipe(delay(1), take(1));
+  return from(this.table.toArray()).pipe(delay(1), take(1));
 }
 
 show(id: number): Observable<${className}> {
-  return from(db.${val}.get(parseInt(\`\${id}\`))).pipe(
+  return from(this.table.get(parseInt(\`\${id}\`))).pipe(
     map(ent => ent ? <${className}>ent : <${className}>{}),
     take(1)
   );
@@ -342,12 +366,16 @@ private transformToSave(entity: ${className}): ${className} {
 store(entity: ${className}): Observable<number> {
   entity = this.transformToSave(entity);
   entity.createdAt = new Date();
-  return from(db.${val}.add(entity)).pipe(take(1));
+  return from(this.table.add(entity)).pipe(take(1));
 }
 
 update(entity: ${className}): Observable<number> {
   entity = this.transformToSave(entity);
-  return from(db.${val}.put(entity)).pipe(take(1));
+  return from(this.table.put(entity)).pipe(take(1));
+}
+
+destroy(id: number): Observable<void> {
+  return from(this.table.delete(id)).pipe(take(1));
 }
 `;
 
