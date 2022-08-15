@@ -33,26 +33,26 @@ async function main() {
         const pathName = val.split("-").join("");
         const className = toPascalCase(val);
 
-        // header("📂 Angular CLI : Module");
-        // console.log(boilerCLIModule(val));
-        // await keypress();
+        header("📂 Angular CLI : Module");
+        console.log(boilerCLIModule(val));
+        await keypress();
 
-        // header("📝 app-routing.module.ts");
-        // console.log(boilerRouting(pathName, val, className));
-        // await keypress();
+        header("📝 app-routing.module.ts");
+        console.log(boilerRouting(pathName, val, className));
+        await keypress();
 
-        // header(`📝 ${val}-routing.module.ts`);
-        // console.log(boilerRoutingModule(className));
-        // await keypress();
+        header(`📝 ${val}-routing.module.ts`);
+        console.log(boilerRoutingModule(className));
+        await keypress();
 
-        // header("📝 app.component.html");
-        // console.log(boilerMenu(pathName, formal));
-        // await keypress();
+        header("📝 app.component.html");
+        console.log(boilerMenu(pathName, formal));
+        await keypress();
 
-        // header("📂 Angular CLI : Model and Components");
-        // console.log(boilerCLIModelComp(val));
-        // console.log("\n\nYou need edit your interface model!!!");
-        // await keypress();
+        header("📂 Angular CLI : Model and Components");
+        console.log(boilerCLIModelComp(val));
+        console.log("\n\nYou need edit your interface model!!!");
+        await keypress();
 
         const model = fs.readFileSync(`src/app/${val}/${val}.model.ts`, {
           encoding: "utf8",
