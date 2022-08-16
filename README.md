@@ -1,4 +1,4 @@
-# Ng Stone 🪨
+# Angular Stone 🪨
 
 Generate some boilerplate automation for Angular 2+.
 
